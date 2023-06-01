@@ -1,0 +1,28 @@
+BASE: ['']
+DATA:
+  FS: 30
+  DATASET: UBFC
+  DO_PREPROCESS: True
+  DATA_FORMAT: NDCHW
+  TRAIN_DATA_PATH: "/Users/zhangxiaoyu/Documents/Toolbox/DeepLearningProject/UBFC"
+  VALID_DATA_PATH: "/Users/zhangxiaoyu/Documents/Toolbox/DeepLearningProject/UBFC-Valid"
+  PREPROCESS :
+    DATA_TYPE: ['Normalized','Standardized']
+    LABEL_TYPE : Normalized
+    CLIP_LENGTH: 180
+    CROP_FACE: True
+    H: 72
+    W: 72
+DEVICE: cpu
+LOG:
+  PATH: runs/exp
+MODEL:
+  DROP_RATE: 0.2
+  NAME: Tscan
+  TSCAN:
+    FRAME_DEPTH: 20
+TRAIN:
+  BATCH_SIZE: 4
+  EPOCHS: 10
+  LR: 0.0001
+  MODEL_FILE_NAME: tscan_train_ubfc.pth

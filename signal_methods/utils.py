@@ -87,7 +87,6 @@ def prpsd(BVP,FS,LL_PR,UL_PR,PlotTF):
     MaxInd = np.argmax(Pxx[FMask],0)
     PR_F = FRange[MaxInd]
     PR = PR_F*60
-    print("PulseRate:",PR)
 
     return PR
 

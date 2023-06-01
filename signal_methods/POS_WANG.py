@@ -12,45 +12,14 @@ def POS_WANG(VideoFile,ECGFile,PPGFile,PlotTF):
     SkinSegmentTF = False
     LPF = 0.7
     HPF = 2.5
-
     WinSec = 1.6
-
-    #
-    if (PlotTF):
-        PlotPRPSD = True
-        PlotSNR = True
-    else:
-        PlotPRPSD = False
-        PlotSNR = False
-
     T, RGB,FS= process_video(VideoFile)
-    #POS begin
-    useFGTransform = False
-    if useFGTransform:
-        RGBBase = np.mean(RGB,axis=0)
-        #TODO:bsxfun
-        RGBNorm = np.true_divide(RGB,RGBBase)-1
-        FF = np.fft.fft(RGBNorm)
-        F = np.linspace(0,RGBNorm.shape[0],RGBNorm.shape[0],endpoint=False)*FS/RGBNorm.shape[0]
-        H = np.matmul(FF,np.array([-1/math.sqrt(6),2/math.sqrt(6),-1/math.sqrt(6)]))
-        W = np.true_divide(np.multiply(H,np.conj(H)),np.sum(np.multiply(FF,np.conj(FF)),axis=1))
-        FMask = (F >= LPF) & (F <= HPF)
-        FMask = FMask + np.fliplr(FMask)
-        W  = np.multiply(W,FMask.T)#TODO:FMASK.HorT
-        FF = np.multiply(FF,np.tile(W,(1,3)))
-        RGBNorm = np.real(np.fft.ifft(FF))
-        #TODO:bsxfun
-        RGBNorm = np.multiply(RGB+1,RGBBase)
-        RGB = RGBNorm
     #lines and comments
     N = RGB.shape[0]
     H = np.zeros((1,N))
     l = math.ceil(WinSec*FS)
     C = np.zeros((1,3))
-
-
     for n in range(N):
-
         m = n-l
         if(m>=0):
             Cn = np.true_divide(RGB[m:n,:],np.mean(RGB[m:n,:],axis=0))
@@ -67,7 +36,7 @@ def POS_WANG(VideoFile,ECGFile,PPGFile,PlotTF):
     BVP = np.asarray(np.transpose(BVP))[0]
     B,A = signal.butter(1,[0.75/FS*2,3/FS*2],'bandpass')
     BVP = signal.filtfilt(B,A,BVP.astype(np.double))
-    PR = utils.prpsd(BVP,FS,40,240,PlotPRPSD)
+    PR = utils.prpsd(BVP,FS,40,240,True)
     return BVP,PR
 
 def process_video(VideoFile):
@@ -88,7 +57,6 @@ def process_video(VideoFile):
         RGB.append(sum/(frame.shape[0]*frame.shape[1]))
         success, frame = VidObj.read()
         CurrentTime = VidObj.get(cv2.CAP_PROP_POS_MSEC)
-    print(RGB)
     return np.asarray(T),np.asarray(RGB),FrameRate
 
 

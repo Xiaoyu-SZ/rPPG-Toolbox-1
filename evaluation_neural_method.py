@@ -44,8 +44,6 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-
-
 def add_args(parser):
     """Adds arguments for parser."""
     parser.add_argument('--config_file', required=False,
@@ -87,6 +85,7 @@ def define_physnet_model(config):
 
 def define_tscan_model(config):
     model = TSCAN(frame_depth=config.MODEL.TSCAN.FRAME_DEPTH, img_size=config.DATA.PREPROCESS.H)
+    model = torch.nn.DataParallel(model, device_ids=list(range(config.NUM_OF_GPU_TRAIN)))
     return load_model(model, config)
 
 
@@ -104,7 +103,51 @@ def read_label(dataset):
 
 
 def read_hr_label(feed_dict, index):
-    # For UBFC only
+    # For UBFC onlydef physnet_predict(model, data_loader, config):
+    """
+
+    """
+    predictions = list()
+    labels = list()
+    model.eval()
+    with torch.no_grad():
+        for _, batch in enumerate(data_loader):
+            data, label = batch[0].to(
+                config.DEVICE), batch[1].to(config.DEVICE)
+            prediction, _, _, _ = model(data)
+            predictions.extend(prediction.to("cpu").numpy())
+            labels.extend(label.to("cpu").numpy())
+    return np.reshape(np.array(predictions), (-1)), np.reshape(np.array(labels), (-1))
+
+
+def tscan_predict(model, data_loader, config):
+    """ Model evaluation on the testing dataset."""
+    print(" ====Testing===")
+    predictions = dict()
+    labels = dict()
+    model.eval()
+    with torch.no_grad():
+        for _, test_batch in enumerate(data_loader):
+            subj_index = test_batch[2][0]
+            sort_index = int(test_batch[3][0])
+            data_test, labels_test = test_batch[0].to(
+                config.DEVICE), test_batch[1].to(config.DEVICE)
+            N, D, C, H, W = data_test.shape
+            data_test = data_test.view(N * D, C, H, W)
+            labels_test = labels_test.view(-1, 1)
+            data_test = data_test[:(
+                                           N * D) // config.MODEL.TSCAN.FRAME_DEPTH * config.MODEL.TSCAN.FRAME_DEPTH]
+            labels_test = labels_test[:(
+                                               N * D) // config.MODEL.TSCAN.FRAME_DEPTH * config.MODEL.TSCAN.FRAME_DEPTH]
+            pred_ppg_test = model(data_test)
+            if subj_index not in predictions.keys():
+                predictions[subj_index] = dict()
+                labels[subj_index] = dict()
+            predictions[subj_index][sort_index] = pred_ppg_test
+            labels[subj_index][sort_index] = labels_test
+    # return np.reshape(np.array(predictions), (-1)), np.reshape(np.array(labels), (-1))
+    return predictions, labels
+
     if index[:7] == 'subject':
         index = index[7:]
     video_dict = feed_dict[index]
@@ -203,8 +246,8 @@ def calculate_metrics(predictions, labels, config):
     gt_hr_fft_all = list()
     predict_hr_peak_all = list()
     gt_hr_peak_all = list()
-    label_hr = list()
-    label_dict = read_label(config.DATA.DATASET)
+    # label_hr = list()
+    # label_dict = read_label(config.DATA.DATASET)
     white_list = []
     for index in predictions.keys():
         if index in white_list:
@@ -220,24 +263,19 @@ def calculate_metrics(predictions, labels, config):
         predict_hr_fft_all.append(pred_hr_fft)
         predict_hr_peak_all.append(pred_hr_peak)
         gt_hr_peak_all.append(gt_hr_peak)
-        video_index, GT_HR = read_hr_label(label_dict, index)
-        label_hr.append(GT_HR)
-        if abs(GT_HR - pred_hr_fft) > 10:
-            print('Video Index: ', video_index)
-            print('GT HR: ', GT_HR)
-            print('Pred HR: ', pred_hr_fft)
+        # video_index, GT_HR = read_hr_label(label_dict, index)
+        # label_hr.append(GT_HR)
+        # if abs(GT_HR - pred_hr_fft) > 10:
+        #     print('Video Index: ', video_index)
+        #     print('GT HR: ', GT_HR)
+        #     print('Pred HR: ', pred_hr_fft)
     predict_hr_peak_all = np.array(predict_hr_peak_all)
     predict_hr_fft_all = np.array(predict_hr_fft_all)
     gt_hr_peak_all = np.array(gt_hr_peak_all)
     gt_hr_fft_all = np.array(gt_hr_fft_all)
-    label_hr_all_manual = np.array(label_hr)
+    # label_hr_all_manual = np.array(label_hr)
     for metric in config.TEST.METRICS:
         if metric == "MAE":
-            MAE_FFT = np.mean(np.abs(predict_hr_fft_all - label_hr_all_manual))
-            MAE_PEAK = np.mean(np.abs(predict_hr_peak_all - label_hr_all_manual))
-            print("FFT MAE:{0}".format(MAE_FFT))
-            print("Peak MAE:{0}".format(MAE_PEAK))
-
             MAE_FFT = np.mean(np.abs(predict_hr_fft_all - gt_hr_peak_all))
             MAE_PEAK = np.mean(np.abs(predict_hr_peak_all - gt_hr_peak_all))
             print("FFT MAE (Peak Label):{0}".format(MAE_FFT))
@@ -249,11 +287,6 @@ def calculate_metrics(predictions, labels, config):
             print("Peak MAE (FFT Label):{0}".format(MAE_PEAK))
 
         elif metric == "RMSE":
-            RMSE_FFT = np.sqrt(np.mean(np.square(predict_hr_fft_all - label_hr_all_manual)))
-            RMSE_PEAK = np.sqrt(np.mean(np.square(predict_hr_peak_all - label_hr_all_manual)))
-            print("FFT RMSE:{0}".format(RMSE_FFT))
-            print("PEAK RMSE:{0}".format(RMSE_PEAK))
-
             RMSE_FFT = np.sqrt(np.mean(np.square(predict_hr_fft_all - gt_hr_peak_all)))
             RMSE_PEAK = np.sqrt(np.mean(np.square(predict_hr_peak_all - gt_hr_peak_all)))
             print("FFT RMSE (Peak Label):{0}".format(RMSE_FFT))
@@ -265,11 +298,6 @@ def calculate_metrics(predictions, labels, config):
             print("PEAK RMSE (FFT Label):{0}".format(RMSE_PEAK))
 
         elif metric == "MAPE":
-            MAPE_FFT = np.mean(np.abs((predict_hr_fft_all - label_hr_all_manual) / label_hr_all_manual)) * 100
-            MAPE_PEAK = np.mean(np.abs((predict_hr_peak_all - label_hr_all_manual) / label_hr_all_manual)) * 100
-            print("FFT MAPE:{0}".format(MAPE_FFT))
-            print("PEAK MAPE:{0}".format(MAPE_PEAK))
-
             MAPE_FFT = np.mean(np.abs((predict_hr_fft_all - gt_hr_peak_all) / gt_hr_peak_all)) * 100
             MAPE_PEAK = np.mean(np.abs((predict_hr_peak_all - gt_hr_peak_all) / gt_hr_peak_all)) * 100
             print("FFT MAPE (Peak Label):{0}".format(MAPE_FFT))
@@ -281,11 +309,8 @@ def calculate_metrics(predictions, labels, config):
             print("PEAK MAPE (FFT Label):{0}".format(MAPE_PEAK))
 
         elif metric == "Pearson":
-            Pearson_FFT = np.corrcoef(predict_hr_fft_all, label_hr_all_manual)
-            Pearson_PEAK = np.corrcoef(predict_hr_peak_all, label_hr_all_manual)
-            print("FFT Pearson:{0}".format(Pearson_FFT[0][1]))
-            print("PEAK Pearson:{0}".format(Pearson_PEAK[0][1]))
-
+            import pdb
+            pdb.set_trace()
             Pearson_FFT = np.corrcoef(predict_hr_fft_all, gt_hr_peak_all)
             Pearson_PEAK = np.corrcoef(predict_hr_peak_all, gt_hr_peak_all)
             print("FFT Pearson (Peak Label):{0}".format(Pearson_FFT[0][1]))
