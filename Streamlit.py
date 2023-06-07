@@ -8,7 +8,7 @@ from base64 import b64encode
 from pathlib import Path
 from streamlit_player import st_player, _SUPPORTED_EVENTS
 
-st.title('rPPG Visualizer')
+st.title('Welcome to rPPG Visualizer')
 avi_path = r'dataset\subject3\vid.avi'
 mp4_path = r'dataset\subject3\vid.mp4'
 
@@ -30,7 +30,7 @@ options = {
                 "progress_interval": 1000,
                 "playing": True,
                 "controls": st.checkbox("Controls", True),
-                "playback_rate" : 1
+                "playback_rate" : 1.5
         }
 
 event = st_player(local_video(mp4_path), **options)
@@ -44,11 +44,13 @@ df = pd.read_json(r'vizdata\f_vizdata.json')
 x = df.shape[0]
 
 progress_bar = st.progress(0)
-status_text = st.empty()
+status_text1 = st.empty()
+status_text2 = st.empty()
+status_text3 = st.empty()
 #[gt_hr_peak, gt_hr_fft, pred_hr_fft,pred_hr_peak,signal_hr_peak, signal_hr_fft]
 
-st.header("Predition")
-st.text("PreditionPeak:" + str(df['HR'][2]) + " PreditionFFT:" + str(df['HR'][3]))
+st.header("Prediction")
+st.text("PredictionPeak:" + str(df['HR'][2]) + " PredictionFFT:" + str(df['HR'][3]))
 chart1 = st.line_chart([df['Prediction'][0]],width=10)
 
 st.header("GroundTruth")
@@ -58,6 +60,8 @@ chart2 = st.line_chart([df['Label'][0]], width=10)
 st.header("Signal")
 st.text("SignalPeak:" + str(df['HR'][4]) + " SignalFFT:" + str(df['HR'][5]))
 chart3 = st.line_chart([df['Signal'][0]], width=10)
+
+status_text4 = st.empty()
 
 if(event[0] == "onPlay"):
     for i in range(x):
@@ -69,22 +73,23 @@ if(event[0] == "onPlay"):
         new_rows_3 = [df['Signal'][i]]
 
         # Update status text.
-        status_text.text(
+        status_text1.text(
             'Prediction data is: %s' % new_rows_1)
-        status_text.text(
+        status_text2.text(
             'Label data is: %s' % new_rows_2)
-        status_text.text(
+        status_text3.text(
             'Signal data is: %s' % new_rows_3)
 
         # Append data to the chart.
         chart1.add_rows(new_rows_1)
         chart2.add_rows(new_rows_2)
         chart3.add_rows(new_rows_3)
+        chart1.
 
         # Pretend we're doing some computation that takes time.
-        time.sleep(0.1)
+        #time.sleep(0.1)
 
-status_text.text('Done!')
+status_text4.text('Done!')
 
 
 #st.balloons()
